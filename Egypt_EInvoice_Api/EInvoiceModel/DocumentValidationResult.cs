@@ -1,0 +1,13 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Egypt_EInvoice_Api.EInvoiceModel
+{
+    public class DocumentValidationResult
+    {
+        public string status { get; set; } //Validation status. Values: In progress, Valid, Invalid
+        public List<ValidationStepResult> validationSteps { get; set; }
+    }
+}

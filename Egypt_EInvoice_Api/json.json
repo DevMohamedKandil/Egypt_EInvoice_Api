@@ -1,0 +1,182 @@
+{
+  "documents": [
+    {
+      "issuer": {
+        "type": "B",
+        "id": "538509228",
+        "name": "‘—ﬂ… œ—Ê» «· „ÊÌ‰ ··Œœ„«  «··ÊÃ” Ì…",
+        "address": {
+          "branchId": "0",
+          "country": "EG",
+          "governate": "Cairo",
+          "regionCity": "Naser City",
+          "street": "Al Jalaa Street",
+          "buildingNumber": "115",
+          "postalCode": "2036",
+          "floor": "1",
+          "room": null,
+          "landmark": "10",
+          "additionalInformation": "Additional Info"
+        }
+      },
+      "receiver": {
+        "type": "P",
+        "id": "29304101700478",
+        "name": "‰ﬁœÌ… «·’‰œÊﬁ",
+        "address": {
+          "branchId": "0",
+          "country": "",
+          "governate": "",
+          "regionCity": "",
+          "street": "",
+          "buildingNumber": "",
+          "postalCode": "",
+          "floor": "",
+          "room": "",
+          "landmark": "",
+          "additionalInformation": ""
+        }
+      },
+      "documentType": "",
+      "documentTypeVersion": "0.9",
+      "dateTimeIssued": "2022-02-17T23:59:59Z",
+      "taxpayerActivityCode": "7020",
+      "internalID": "18781293-C5D1-46BC-853D-1F314A386FB2",
+      "purchaseOrderReference": "",
+      "purchaseOrderDescription": "",
+      "salesOrderReference": "",
+      "salesOrderDescription": "",
+      "proformaInvoiceNumber": "",
+      "payment": {
+        "bankName": "",
+        "bankAddress": "",
+        "bankAccountNo": "",
+        "bankAccountIBAN": "",
+        "swiftCode": "",
+        "terms": ""
+      },
+      "delivery": {
+        "approach": "",
+        "packaging": "",
+        "dateValidity": null,
+        "exportPort": "",
+        "countryOfOrigin": "",
+        "grossWeight": 0.0,
+        "netWeight": 0.0,
+        "terms": ""
+      },
+      "invoiceLines": [
+        {
+          "description": "”«”Ê‰Ã «” 21 »·”",
+          "itemType": "EGS",
+          "itemCode": "EG-538509228-S1002",
+          "unitType": "EA",
+          "quantity": 2.0,
+          "unitValue": {
+            "currencySold": "EGP",
+            "amountEGP": 3500.0,
+            "amountSold": null,
+            "currencyExchangeRate": 0.0
+          },
+          "salesTotal": 7000.0,
+          "total": 7000.0,
+          "valueDifference": 0.0,
+          "totalTaxableFees": 0.0,
+          "netTotal": 7000.0,
+          "itemsDiscount": 0.0,
+          "discount": {
+            "rate": 0.0,
+            "amount": 0.0
+          },
+          "taxableItems": [
+            {
+              "taxType": "T1",
+              "amount": 0.0,
+              "subType": "V004",
+              "rate": 0.0
+            }
+          ],
+          "internalCode": "S1002"
+        },
+        {
+          "description": "«Ì›Ê‰ 11",
+          "itemType": "EGS",
+          "itemCode": "EG-538509228-I1011",
+          "unitType": "EA",
+          "quantity": 3.0,
+          "unitValue": {
+            "currencySold": "EGP",
+            "amountEGP": 3600.0,
+            "amountSold": null,
+            "currencyExchangeRate": 0.0
+          },
+          "salesTotal": 10800.0,
+          "total": 11340.0,
+          "valueDifference": 0.0,
+          "totalTaxableFees": 0.0,
+          "netTotal": 11340.0,
+          "itemsDiscount": 0.0,
+          "discount": {
+            "rate": 0.0,
+            "amount": 0.0
+          },
+          "taxableItems": [
+            {
+              "taxType": "T1",
+              "amount": 540.0,
+              "subType": "V009",
+              "rate": 5.0
+            }
+          ],
+          "internalCode": "I1011"
+        },
+        {
+          "description": "Samsung Note 20 Ultra",
+          "itemType": "EGS",
+          "itemCode": "EG-538509228-S1001",
+          "unitType": "EA",
+          "quantity": 1.0,
+          "unitValue": {
+            "currencySold": "EGP",
+            "amountEGP": 6700.0,
+            "amountSold": null,
+            "currencyExchangeRate": 0.0
+          },
+          "salesTotal": 6700.0,
+          "total": 7386.75,
+          "valueDifference": 0.0,
+          "totalTaxableFees": 0.0,
+          "netTotal": 7386.75,
+          "itemsDiscount": 0.0,
+          "discount": {
+            "rate": 0.0,
+            "amount": 0.0
+          },
+          "taxableItems": [
+            {
+              "taxType": "T1",
+              "amount": 351.75,
+              "subType": "V009",
+              "rate": 5.0
+            }
+          ],
+          "internalCode": "S1001"
+        }
+      ],
+      "totalSalesAmount": 24500.0,
+      "totalDiscountAmount": 0.0,
+      "netAmount": 25726.75,
+      "taxTotals": [
+        {
+          "taxType": "T1",
+          "amount": 335.0
+        }
+      ],
+      "extraDiscountAmount": 0.0,
+      "totalItemsDiscountAmount": 0.0,
+      "totalAmount": 26618.5,
+      "signatures": [],
+      "references": []
+    }
+  ]
+}
