@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using Egypt_EInvoice_Api.EInvoiceModel;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Configuration;
+using Egypt_EInvoice_Api.Response;
 
 namespace Egypt_EInvoice_Api.BLL
 {
@@ -420,26 +421,51 @@ namespace Egypt_EInvoice_Api.BLL
 
 
         }
+        /////////////////////////////////////////Edit by mohamed kandil //////////////////////
+        //public void CreateESGCode(List<ESGItem> newItems) //Create EGS Code Usage API is a way for taxpayer to register his own internal codes in the eInvicing solution.
+        //{
+        //    for (int i = 0; i < newItems.Count; i++)
+        //    {
+        //        //Signature: POST /api/v1.0/codetypes/requests/codes
 
-        public void CreateESGCode(List<ESGItem> newItems) //Create EGS Code Usage API is a way for taxpayer to register his own internal codes in the eInvicing solution.
+        //        Codes codes = new Codes()
+        //        {
+        //            items = newItems.ToArray()
+        //        };
+        //        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1.0/codetypes/requests/codes")
+        //        {
+        //            Content = JsonContent.Create(codes)
+        //        };
+
+        //        var result = requestHttpClient.SendAsync(request);
+        //        var response = result.Result.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        //    }
+
+        //}
+
+        public async Task<EtaCreateCodeResponse> CreateESGCodeAsync(List<ESGItem> newItems)
         {
-            for (int i = 0; i < newItems.Count; i++)
+            Codes codes = new Codes
             {
-                //Signature: POST /api/v1.0/codetypes/requests/codes
+                items = newItems.ToArray()
+            };
 
-                Codes codes = new Codes()
-                {
-                    items = newItems.ToArray()
-                };
-                var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1.0/codetypes/requests/codes")
-                {
-                    Content = JsonContent.Create(codes)
-                };
+            var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                "/api/v1.0/codetypes/requests/codes")
+            {
+                Content = JsonContent.Create(codes)
+            };
 
-                var result = requestHttpClient.SendAsync(request);
-                var response = result.Result.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            }
-           
+            var response = await requestHttpClient.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            return new EtaCreateCodeResponse
+            {
+                IsSuccess = response.IsSuccessStatusCode,
+                RawResponse = content,
+                StatusCode = response.StatusCode
+            };
         }
 
         public void SearchESGCode() //Search my EGS code usage requests API is responsible for retrieving list of requests that were submitted to the solution by the taxpayer.
@@ -502,6 +528,16 @@ namespace Egypt_EInvoice_Api.BLL
 
         public void UpdateCode()
         {
+        }
+        public async Task<object> GetRecentDocumentsAsync(int pageNo, int pageSize)
+        {
+            var url = $"/api/v1.0/documents/recent?pageNo={pageNo}&pageSize={pageSize}";
+
+            var response = await requestHttpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<object>(json);
         }
 
     }

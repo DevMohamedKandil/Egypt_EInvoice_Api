@@ -30,20 +30,21 @@ namespace Egypt_EInvoice_Api.Controllers
 
         private readonly IConfiguration Configuration;
 
-
+        private readonly EInvoiceGovManager _eta;
 
         //static Uri IdentityServiceUri = new Uri("https://id.preprod.eta.gov.eg/connect/token");
         //static Uri APISystemUri = new Uri("https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documentsubmissions");
 
 
-       // static Uri IdentityServiceUri = new Uri("https://id.eta.gov.eg/connect/token");
-       // static Uri APISystemUri = new Uri("https://api.invoicing.eta.gov.eg/api/v1.0/documentsubmissions");
+        // static Uri IdentityServiceUri = new Uri("https://id.eta.gov.eg/connect/token");
+        // static Uri APISystemUri = new Uri("https://api.invoicing.eta.gov.eg/api/v1.0/documentsubmissions");
 
 
         public EInvoicesController(IBaseRepos<VWEInvoice> eInvoiceRepos,
             IBaseRepos<VwEInvoiceMaster> eInvoiceMasterRepos,
              IBaseRepos<Bill> billRep
-             , IConfiguration configuration
+             , IConfiguration configuration,
+             EInvoiceGovManager eta
 
             )
         {
@@ -51,6 +52,7 @@ namespace Egypt_EInvoice_Api.Controllers
             this.eInvoiceMasterRepos = eInvoiceMasterRepos;
             this.billRep = billRep;
             Configuration = configuration;
+            _eta = eta;
 
 
             //this.invoiceLineRepos = invoiceLineRepos;
@@ -941,6 +943,18 @@ namespace Egypt_EInvoice_Api.Controllers
 
 
         }
+    
+
+         
+            [HttpGet("GetRecentDocuments")]
+            public async Task<IActionResult> GetRecentDocuments(
+                int pageNo = 1,
+                int pageSize = 20)
+            {
+                var result = await _eta.GetRecentDocumentsAsync(pageNo, pageSize);
+                return Ok(result);
+            }
+        
 
 
     }
