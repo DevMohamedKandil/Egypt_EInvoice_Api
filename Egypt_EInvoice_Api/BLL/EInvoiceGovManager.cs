@@ -24,17 +24,17 @@ namespace Egypt_EInvoice_Api.BLL
 
         private HttpClient httpClient;
         private HttpClient requestHttpClient;
+        private readonly Appsettings settings;
 
     
         public EInvoiceGovManager()
+            : this(BuildConfiguration())
         {
-            IConfiguration config = new ConfigurationBuilder()
-.AddJsonFile("appsettings.json")
-.AddEnvironmentVariables()
-.Build();
+        }
 
-
-            Appsettings settings = config.GetRequiredSection("Settings").Get<Appsettings>();
+        public EInvoiceGovManager(IConfiguration configuration)
+        {
+            settings = configuration.GetRequiredSection("Settings").Get<Appsettings>();
 
             httpClient = new HttpClient();
             requestHttpClient = new HttpClient();
@@ -53,14 +53,6 @@ namespace Egypt_EInvoice_Api.BLL
 
         public LoginResponse Login()
         {
-            IConfiguration config = new ConfigurationBuilder()
-.AddJsonFile("appsettings.json")
-.AddEnvironmentVariables()
-.Build();
-
-
-            Appsettings settings = config.GetRequiredSection("Settings").Get<Appsettings>();
-
             HttpContent content = new FormUrlEncodedContent(
                 //   null
                 new[]
@@ -90,13 +82,6 @@ namespace Egypt_EInvoice_Api.BLL
 
         public LoginResponse LoginIntermediary()
         {
-            IConfiguration config = new ConfigurationBuilder()
-.AddJsonFile("appsettings.json")
-.AddEnvironmentVariables()
-.Build();
-
-
-            Appsettings settings = config.GetRequiredSection("Settings").Get<Appsettings>();
             httpClient.DefaultRequestHeaders.Add("onbehalfof", settings.onBehalf);
             HttpContent content = new FormUrlEncodedContent(new[] {
                 new KeyValuePair<string, string>("grant_type", "client_credentials")
@@ -538,6 +523,16 @@ namespace Egypt_EInvoice_Api.BLL
 
             var json = await response.Content.ReadAsStringAsync();
             return JsonConvert.DeserializeObject<object>(json);
+        }
+
+        private static IConfiguration BuildConfiguration()
+        {
+            return new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
+                .AddEnvironmentVariables()
+                .Build();
         }
 
     }

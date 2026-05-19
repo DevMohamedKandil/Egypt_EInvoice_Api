@@ -137,6 +137,7 @@ namespace Egypt_EInvoice_Api.Models
         public byte? ShippingKind { get; set; }
         public bool? IsUploaded { get; set; }
         public string EInvoiceGuid { get; set; }
+        public string SubmissionNotes { get; set; }
         public DateTime? SupplyDate { get; set; }
        
 

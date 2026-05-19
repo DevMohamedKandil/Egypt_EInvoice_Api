@@ -42,9 +42,20 @@ namespace Egypt_EInvoice_Api
         public string apiUrl { get; set; }
         public string onBehalf { get; set; }
         public int InvoiceTitle { get; set; }
+        public EtaSigningOptions Signing { get; set; }
 
 
 
 
+    }
+
+    public class EtaSigningOptions
+    {
+        public string Pkcs11LibraryPath { get; set; }
+        public string TokenPin { get; set; }
+        public string CertificateSerialNumber { get; set; }
+        public string CertificateLabel { get; set; }
+        public string CertificateSubjectContains { get; set; }
+        public string CertificateId { get; set; }
     }
 }

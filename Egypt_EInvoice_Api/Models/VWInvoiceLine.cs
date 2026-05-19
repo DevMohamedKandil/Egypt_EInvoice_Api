@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Egypt_EInvoice_Api.Models
 {
     public class VWInvoiceLine
@@ -24,7 +26,7 @@ namespace Egypt_EInvoice_Api.Models
         //============================================================
         public double salesTotal { get; set; } //السعر في الكمية Total amount for the invoice line considering quantity and unit price in EGP (with excluded factory amounts if they are present for specific types in documents).
         public double total { get; set; }  //Total amount for the invoice line after adding all pricing items, taxes, removing discounts
-        public decimal valueDifference { get; set; } //Value difference when selling goods already taxed (accepts +/- numbers), e.g., factory value based.
+        public decimal valueDifference { get; set; }
         public double totalTaxableFees { get; set; } //Total amount of additional taxable fees to be used in final tax calculation. اجمالي الرسوم الاضافية الخاضعة للضريبة
         public double netTotal { get; set; } // Total amount for the invoice line after applying discount.
         public double itemsDiscount { get; set; } //Non-taxable items discount.

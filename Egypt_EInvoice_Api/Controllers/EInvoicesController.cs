@@ -2,6 +2,7 @@
 using Egypt_EInvoice_Api.EInvoiceModel;
 using Egypt_EInvoice_Api.Models;
 using Egypt_EInvoice_Api.Repos;
+using Egypt_EInvoice_Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -16,6 +17,7 @@ using System.Threading.Tasks;
 using Egypt_EInvoice_Api.Response;
 using System.IO;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Egypt_EInvoice_Api.Controllers
 {
@@ -26,33 +28,34 @@ namespace Egypt_EInvoice_Api.Controllers
         private readonly IBaseRepos<VWEInvoice> eInvoiceRepos;
         private readonly IBaseRepos<VwEInvoiceMaster> eInvoiceMasterRepos;
 
-        private readonly IBaseRepos<Bill> billRep;
-
         private readonly IConfiguration Configuration;
 
         private readonly EInvoiceGovManager _eta;
-
-        //static Uri IdentityServiceUri = new Uri("https://id.preprod.eta.gov.eg/connect/token");
-        //static Uri APISystemUri = new Uri("https://api.preprod.invoicing.eta.gov.eg/api/v1.0/documentsubmissions");
-
-
-        // static Uri IdentityServiceUri = new Uri("https://id.eta.gov.eg/connect/token");
-        // static Uri APISystemUri = new Uri("https://api.invoicing.eta.gov.eg/api/v1.0/documentsubmissions");
+        private readonly IInvoiceSigningService invoiceSigningService;
+        private readonly IEtaSubmissionService etaSubmissionService;
+        private readonly IBillUploadStatusService billUploadStatusService;
+        private readonly ILogger<EInvoicesController> logger;
 
 
         public EInvoicesController(IBaseRepos<VWEInvoice> eInvoiceRepos,
             IBaseRepos<VwEInvoiceMaster> eInvoiceMasterRepos,
-             IBaseRepos<Bill> billRep
-             , IConfiguration configuration,
-             EInvoiceGovManager eta
+             IConfiguration configuration,
+             EInvoiceGovManager eta,
+             IInvoiceSigningService invoiceSigningService,
+             IEtaSubmissionService etaSubmissionService,
+             IBillUploadStatusService billUploadStatusService,
+             ILogger<EInvoicesController> logger
 
             )
         {
             this.eInvoiceRepos = eInvoiceRepos;
             this.eInvoiceMasterRepos = eInvoiceMasterRepos;
-            this.billRep = billRep;
             Configuration = configuration;
             _eta = eta;
+            this.invoiceSigningService = invoiceSigningService;
+            this.etaSubmissionService = etaSubmissionService;
+            this.billUploadStatusService = billUploadStatusService;
+            this.logger = logger;
 
 
             //this.invoiceLineRepos = invoiceLineRepos;
@@ -116,8 +119,7 @@ namespace Egypt_EInvoice_Api.Controllers
         public void CreateESGCode()
 
         {
-            EInvoiceGovManager obj = new EInvoiceGovManager();
-            var loginResponse = obj.Login();
+            var loginResponse = _eta.Login();
             if (loginResponse != null)
             {
 
@@ -133,13 +135,7 @@ namespace Egypt_EInvoice_Api.Controllers
         public BillResponse UploadInvoice(VwEInvoiceMasterdto bill)
 
         {
-            IConfiguration config = new ConfigurationBuilder()
-  .AddJsonFile("appsettings.json")
-  .AddEnvironmentVariables()
-  .Build();
-
-
-            Appsettings settings = config.GetRequiredSection("Settings").Get<Appsettings>();
+            Appsettings settings = Configuration.GetRequiredSection("Settings").Get<Appsettings>();
             // string ErrorMessage = string.Empty;
             var item = this.eInvoiceMasterRepos.FindByGuid(Guid.Parse(bill.InternalId));
 
@@ -149,7 +145,6 @@ namespace Egypt_EInvoice_Api.Controllers
 
             EInvoiceModel.Document obj = new EInvoiceModel.Document();
             List<EInvoiceModel._documents> List = new List<EInvoiceModel._documents>();
-            EInvoiceGovManager EGovmanager = new EInvoiceGovManager();
 
             EInvoiceModel.Issuer issuer = new EInvoiceModel.Issuer();
 
@@ -593,8 +588,8 @@ namespace Egypt_EInvoice_Api.Controllers
 
 
 
-                    invoiceLine.valueDifference = (decimal)item2.valueDifference;
-                    
+                    invoiceLine.valueDifference = item2.valueDifference;
+                                        
                     obj.invoiceLines[index] = invoiceLine;
                     
 
@@ -633,201 +628,196 @@ namespace Egypt_EInvoice_Api.Controllers
                 FloatFormatHandling = FloatFormatHandling.String,
                 FloatParseHandling = FloatParseHandling.Decimal,
                 DateFormatHandling = DateFormatHandling.IsoDateFormat,
-                DateParseHandling = DateParseHandling.None
+                DateParseHandling = DateParseHandling.None,
+                NullValueHandling = NullValueHandling.Ignore
             });
           
 
 
             SaveInvoice(output2, item.InternalId);
 
-            BillController obj3 = new BillController(billRep);
-            obj3.Update(Guid.Parse(item.InternalId));
-            return new BillResponse()
+            JObject unsignedDocument = ParseDocumentJsonPreservingPrimitiveValues(output2);
+            SignedInvoiceDocument signedInvoice;
+            try
             {
-                BillNo = item.BillNo,
-                Msg = "Invoice Uploaded successfully",
-                BillGuid = item.InternalId
+                signedInvoice = invoiceSigningService.SignDocument(unsignedDocument, item.BillNo, item.InternalId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "ETA signing failed. BillNo: {BillNo}, InternalId: {InternalId}",
+                    item.BillNo,
+                    item.InternalId);
+
+                billUploadStatusService.MarkRejected(
+                    Guid.Parse(item.InternalId),
+                    "SigningFailed",
+                    "Signing failed: " + ex.Message,
+                    null);
+
+                return new BillResponse()
+                {
+                    BillNo = item.BillNo,
+                    Msg = "Signing failed: " + ex.Message,
+                    BillGuid = item.InternalId
+                };
+            }
+
+            string output3 = signedInvoice.SignedDocument.ToString(Formatting.None);
+            SaveInvoice(output3, item.InternalId + "_signed");
+            logger.LogInformation(
+                "ETA final signed document prepared. BillNo: {BillNo}, InternalId: {InternalId}, CanonicalSha256: {CanonicalSha256}, SignatureBase64Length: {SignatureBase64Length}, SignedJson: {SignedJson}",
+                item.BillNo,
+                item.InternalId,
+                signedInvoice.CanonicalContentSha256,
+                signedInvoice.Signature?.Length ?? 0,
+                output3);
+
+            JObject JSONInvoice = new JObject
+            {
+                ["documents"] = new JArray(signedInvoice.SignedDocument)
             };
 
+            try
+            {
+                EtaSubmissionResult result = etaSubmissionService
+                    .SubmitDocumentsAsync(JSONInvoice, item.BillNo, item.InternalId)
+                    .GetAwaiter()
+                    .GetResult();
 
-            ////
-            ///
+                if (result == null)
+                {
+                    billUploadStatusService.MarkRejected(
+                        Guid.Parse(item.InternalId),
+                        "NoResponse",
+                        "Upload process failed, Please try again later",
+                        null);
 
-            #region -- comment
+                    return new BillResponse()
+                    {
+                        BillNo = item.BillNo,
+                        Msg = "Upload process failed, Please try again later",
+                        BillGuid = item.InternalId
+                    };
+                }
 
-            //TokenSigner token = new TokenSigner();
-            //var tokenSinger = token.SignWithCMS(token.Serialize(JObject.Parse(output2)));
-            //// obj.signatures = new Signature() { type = "I", value = tokenSinger };
+                if (result.IsDuplicatePayload)
+                {
+                    string duplicateMessage = "ETA rejected this retry because the request payload is identical to one sent in the last 10 minutes. Please wait and retry, or check ETA portal for the earlier submission.";
+                    billUploadStatusService.MarkDuplicate(
+                        Guid.Parse(item.InternalId),
+                        duplicateMessage,
+                        result.RawResponse);
 
-            //obj.signatures = new Signature[1];
-            //obj.signatures[0] = new Signature
-            //{
-            //    signatureType = "I",
-            //    value = tokenSinger
+                    return new BillResponse()
+                    {
+                        BillNo = item.BillNo,
+                        Msg = duplicateMessage,
+                        BillGuid = item.InternalId
+                    };
+                }
 
-            //};
+                DocumetSubmitResponse etaResponse = result.Response;
+                if (etaResponse == null)
+                {
+                    string failureMessage = EtaResponseFormatter.BuildRawFailureMessage(result);
+                    billUploadStatusService.MarkRejected(
+                        Guid.Parse(item.InternalId),
+                        "Failed",
+                        failureMessage,
+                        result.RawResponse);
 
-            //string output3 = JsonConvert.SerializeObject(obj);
+                    return new BillResponse()
+                    {
+                        BillNo = item.BillNo,
+                        Msg = failureMessage,
+                        BillGuid = item.InternalId
+                    };
+                }
 
+                AcceptedDocument acceptedDocument = null;
+                if (etaResponse.acceptedDocuments != null && etaResponse.acceptedDocuments.Count > 0)
+                {
+                    acceptedDocument = etaResponse.acceptedDocuments
+                        .FirstOrDefault(x => string.Equals(x.internalId, obj.internalID, StringComparison.OrdinalIgnoreCase))
+                        ?? etaResponse.acceptedDocuments.First();
+                }
 
-            /////
+                if (!string.IsNullOrWhiteSpace(etaResponse.submissionUUID) || acceptedDocument != null)
+                {
+                    billUploadStatusService.MarkAccepted(
+                        Guid.Parse(item.InternalId),
+                        etaResponse.submissionUUID,
+                        acceptedDocument,
+                        result.RawResponse);
 
-            //string StingInvoice = "{'documents': [" + output3 + "]}";
-            //JObject JSONInvoice = JObject.Parse(StingInvoice);
-            //var content = new StringContent(JSONInvoice.ToString(), Encoding.UTF8, "application/json");
-            ////var loginResponse = EGovmanager.Login();
-            //try
-            //{
-            //    var result = Task.Run(() => PostURIWithToken(APISystemUri, content, GetAccessToken())).GetAwaiter().GetResult();
+                    return new BillResponse()
+                    {
+                        BillNo = item.BillNo,
+                        Msg = "Invoice Uploaded successfully",
+                        BillGuid = item.InternalId
+                    };
+                }
 
-            //    //var  = t;
-            //    if (result != null)
-            //    {
+                if (etaResponse.rejectedDocuments != null && etaResponse.rejectedDocuments.Count > 0)
+                {
+                    string rejectionMessage = EtaResponseFormatter.BuildRejectedDocumentsMessage(etaResponse.rejectedDocuments);
+                    billUploadStatusService.MarkRejected(
+                        Guid.Parse(item.InternalId),
+                        "Rejected",
+                        rejectionMessage,
+                        result.RawResponse);
 
-            //        if (result != null)
-            //        {
-            //            if (result.submissionUUID != null)
-            //            {
-            //                BillController obj3 = new BillController(billRep);
-            //                obj3.Update(Guid.Parse(item.InternalId));
-            //                return new BillResponse()
-            //                {
-            //                    BillNo = item.BillNo,
-            //                    Msg = "Invoice Uploaded successfully",
-            //                    BillGuid = item.InternalId
-            //                };
+                    return new BillResponse()
+                    {
+                        BillNo = item.BillNo,
+                        Msg = rejectionMessage,
+                        BillGuid = item.InternalId
+                    };
+                }
 
-            //            }
-            //            else
-            //            {
-            //                if (result.acceptedDocuments != null)
-            //                {
-            //                    if (result.acceptedDocuments.Count > 0)
-            //                    {
-            //                        BillController obj3 = new BillController(billRep);
-            //                        obj3.Update(Guid.Parse(item.InternalId));
-            //                        return new BillResponse()
-            //                        {
-            //                            BillNo = item.BillNo,
-            //                            Msg = "Invoice Uploaded successfully",
-            //                            BillGuid = item.InternalId
-            //                        };
-            //                    }
-            //                    else
-            //                    {
-            //                        string err = "";
-            //                        if (result.rejectedDocuments.Count > 0)
-            //                        {
-            //                            foreach (var res in result.rejectedDocuments)
-            //                            {
-            //                                if (res.error.details != null)
-            //                                {
-            //                                    err += "An error occured at bill " + item.BillNo + ": " + res.error.details[0].message + "\n";
-            //                                }
-            //                                else
-            //                                {
-            //                                    err += "An error occured at bill " + item.BillNo + ": " + res.error.message + "\n";
-            //                                }
+                billUploadStatusService.MarkRejected(
+                    Guid.Parse(item.InternalId),
+                    "Failed",
+                    "Upload process failed, Please try again later",
+                    result.RawResponse);
 
-            //                            }
+                return new BillResponse()
+                {
+                    BillNo = item.BillNo,
+                    Msg = "Upload process failed, Please try again later",
+                    BillGuid = item.InternalId
+                };
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "ETA submission failed. BillNo: {BillNo}, InternalId: {InternalId}",
+                    item.BillNo,
+                    item.InternalId);
 
-            //                        }
-            //                        return new BillResponse()
-            //                        {
-            //                            BillNo = item.BillNo,
-            //                            Msg = err,
-            //                            BillGuid = item.InternalId
-            //                        };
-            //                    }
+                billUploadStatusService.MarkRejected(
+                    Guid.Parse(item.InternalId),
+                    "Exception",
+                    ex.Message,
+                    null);
 
-            //                }
-            //                else
-            //                {
-            //                    string err = "";
-            //                    if (result.rejectedDocuments.Count > 0)
-            //                    {
-            //                        foreach (var res in result.rejectedDocuments)
-            //                        {
-            //                            if (res.error.details != null)
-            //                            {
-            //                                err += "An error occured at bill " + item.BillNo + ": " + res.error.details[0].message + "\n";
-            //                            }
-            //                            else
-            //                            {
-            //                                err += "An error occured at bill " + item.BillNo + ": " + res.error.message + "\n";
-            //                            }
-
-            //                        }
-
-            //                    }
-            //                    return new BillResponse()
-            //                    {
-            //                        BillNo = item.BillNo,
-            //                        Msg = err,
-            //                        BillGuid = item.InternalId
-            //                    };
-            //                }
-
-            //            }
-
-
-
-
-
-            //        }
-            //        else
-            //        {
-            //            return new BillResponse()
-            //            {
-            //                BillNo = item.BillNo,
-            //                Msg = "Upload process failed, Please try again later",
-            //                BillGuid = item.InternalId
-            //            };
-
-            //        }
-
-            //        //BillController obj3 = new BillController(billRep);
-            //        //obj3.Update(Guid.Parse(item.InternalId));
-
-            //    }
-            //    else
-            //    {
-            //        return new BillResponse()
-            //        {
-            //            BillNo = item.BillNo,
-            //            Msg = "Upload process failed, Please try again later",
-            //            BillGuid = item.InternalId
-            //        };
-
-            //    }
-
-
-
-            //}
-            //catch (Exception ex)
-            //{
-
-            //    return new BillResponse()
-            //    {
-            //        BillNo = item.BillNo,
-            //        Msg = ex.Message,
-            //        BillGuid = item.InternalId
-            //    };
-            //}
-            #endregion
+                return new BillResponse()
+                {
+                    BillNo = item.BillNo,
+                    Msg = ex.Message,
+                    BillGuid = item.InternalId
+                };
+            }
 
         }
 
 
         public void SaveInvoice(string strinvoice,string filename)
         {
-            IConfiguration config = new ConfigurationBuilder()
-.AddJsonFile("appsettings.json")
-.AddEnvironmentVariables()
-.Build();
-
-
-            Appsettings settings = config.GetRequiredSection("Settings").Get<Appsettings>();
+            Appsettings settings = Configuration.GetRequiredSection("Settings").Get<Appsettings>();
             string path = @"C:\Invoices";
             if (settings.InvoiceFolderPath != null && !string.IsNullOrEmpty(settings.InvoiceFolderPath))
                 path = settings.InvoiceFolderPath;
@@ -843,6 +833,7 @@ namespace Egypt_EInvoice_Api.Controllers
             string filepath = path + "\\" + filename + ".json";
 
             System.IO.File.WriteAllBytes(filepath, System.Text.Encoding.UTF8.GetBytes(strinvoice));
+            logger.LogInformation("Invoice payload saved. FilePath: {InvoicePayloadPath}", filepath);
 
             //if (!System.IO.File.Exists(filepath))
             //{
@@ -860,69 +851,17 @@ namespace Egypt_EInvoice_Api.Controllers
             //    }
             //}
         }
-        //static async Task<DocumetSubmitResponse> PostURIWithToken(Uri u, HttpContent c, string t)
-        //{
-        //    DocumetSubmitResponse response = new DocumetSubmitResponse();
-        //    string responseString = "";
-        //    using (var client = new HttpClient())
-        //    {
-        //        client.DefaultRequestHeaders.Accept.Clear();
-        //        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", t);
-        //        HttpResponseMessage result = await client.PostAsync(u, c);
-        //        responseString = await result.Content.ReadAsStringAsync();
-        //        response = JsonConvert.DeserializeObject<DocumetSubmitResponse>(responseString);
 
-        //    }
-        //    if (response.acceptedDocuments == null && response.rejectedDocuments == null && response.submissionUUID == null)
-        //    {
-        //        List<RejectedDocument> rejectedDocuments = new List<RejectedDocument>();
-        //        rejectedDocuments.Add(new RejectedDocument()
-        //        {
-        //            error = new Error()
-        //            {
-        //                message = responseString
-        //            }
-        //        });
-        //        return new DocumetSubmitResponse()
-        //        {
-        //            rejectedDocuments = rejectedDocuments
-        //        };
-        //    }
-        //    else if (response.rejectedDocuments.Count > 0) 
-        //    {
-        //        List<RejectedDocument> rejectedDocuments = response.rejectedDocuments;
-               
-        //        return new DocumetSubmitResponse()
-        //        {
-        //            rejectedDocuments = rejectedDocuments
-        //        };
-        //    }
-            
-        //    return response;
-        //}
-
-        //static string GetAccessToken()
-        //{
-        //    System.Net.ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
-        //    var payload = "Client_id=" + Helper.client_id + "&Client_secret=" + Helper.client_secret + "&grant_type=client_credentials";
-        //    HttpContent c = new StringContent(payload, Encoding.UTF8, "application/x-www-form-urlencoded");
-        //    var t = Task.Run(() => PostURI(IdentityServiceUri, c));
-        //    t.Wait();
-        //    return JObject.Parse(t.Result)["access_token"].ToString();
-        //}
-        //static async Task<string> PostURI(Uri u, HttpContent c)
-        //{
-        //    var response = string.Empty;
-        //    using (var client = new HttpClient())
-        //    {
-        //        HttpResponseMessage result = await client.PostAsync(u, c);
-        //        if (result.IsSuccessStatusCode)
-        //        {
-        //            response = await result.Content.ReadAsStringAsync();
-        //        }
-        //    }
-        //    return response;
-        //}
+        private static JObject ParseDocumentJsonPreservingPrimitiveValues(string json)
+        {
+            using (StringReader stringReader = new StringReader(json))
+            using (JsonTextReader jsonReader = new JsonTextReader(stringReader))
+            {
+                jsonReader.DateParseHandling = DateParseHandling.None;
+                jsonReader.FloatParseHandling = FloatParseHandling.Decimal;
+                return JObject.Load(jsonReader);
+            }
+        }
 
         [HttpPost]
         [Route("UploadInvoices")]

@@ -350,6 +350,9 @@ ASALocalRun/
 # Local History for Visual Studio
 .localhistory/
 
+# Environment-specific production overrides
+Egypt_EInvoice_Api/appsettings.Production.json
+
 # BeatPulse healthcheck temp database
 healthchecksdb
 

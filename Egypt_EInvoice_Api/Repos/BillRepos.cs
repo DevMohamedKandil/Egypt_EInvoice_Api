@@ -66,10 +66,12 @@ namespace Egypt_EInvoice_Api.Repos
             {
 
                 Bill Bill = FindByGuid(item.Guid);
-                Bill.IsUploaded = true;
+                if (Bill == null)
+                    return null;
 
+                context.Entry(Bill).CurrentValues.SetValues(item);
                 this.context.SaveChanges();
-                return item;
+                return Bill;
 
             }
             catch (Exception ex)

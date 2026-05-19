@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Egypt_EInvoice_Api.Models;
 using Egypt_EInvoice_Api.Repos;
 using Egypt_EInvoice_Api.BLL;
+using Egypt_EInvoice_Api.Services;
 
 namespace Egypt_EInvoice_Api.Controllers
 {
@@ -15,26 +16,24 @@ namespace Egypt_EInvoice_Api.Controllers
     public class BillController : ControllerBase 
     {
         private readonly IBaseRepos<Bill> BillRepos;
+        private readonly IBillUploadStatusService billUploadStatusService;
 
 
-        public BillController(IBaseRepos<Bill> BillRepos)
+        public BillController(IBaseRepos<Bill> BillRepos, IBillUploadStatusService billUploadStatusService)
         {
             this.BillRepos = BillRepos;
+            this.billUploadStatusService = billUploadStatusService;
         }
 
         [HttpPost]
         [Route("Update")]
         public bool Update(Guid billguid)
         {
-            Bill billObject = BillRepos.FindByGuid(billguid);
-
-            if (billObject != null)
-            {
-                billObject.IsUploaded = true;
-                BillRepos.Update(billObject);
-                return true;
-            }
-            return false;
+            return billUploadStatusService.MarkAccepted(
+                billguid,
+                null,
+                null,
+                "Marked uploaded through legacy Bill/Update endpoint") != null;
         }
 
 

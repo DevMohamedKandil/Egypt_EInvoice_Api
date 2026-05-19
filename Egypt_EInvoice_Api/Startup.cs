@@ -14,6 +14,8 @@ using Egypt_EInvoice_Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Egypt_EInvoice_Api.Repos;
 using System.Text;
+using Microsoft.AspNetCore.Http;
+using Egypt_EInvoice_Api.Services;
 
 namespace Egypt_EInvoice_Api
 {
@@ -47,6 +49,11 @@ namespace Egypt_EInvoice_Api
 
             services.AddScoped<IBaseRepos<BillType>, BillTypeRepos>();//
             services.AddScoped<IBaseRepos<Bill>, BillRepos>();//
+            services.AddScoped<Egypt_EInvoice_Api.BLL.EInvoiceGovManager>();
+            services.AddScoped<IEtaAuthService, EtaAuthService>();
+            services.AddScoped<IEtaSubmissionService, EtaSubmissionService>();
+            services.AddScoped<IInvoiceSigningService, InvoiceSigningService>();
+            services.AddScoped<IBillUploadStatusService, BillUploadStatusService>();
 
             services.Configure<IISServerOptions>(options =>
             {
@@ -77,6 +84,26 @@ namespace Egypt_EInvoice_Api
             }
 
             app.UseHttpsRedirection();
+
+            app.Use(async (context, next) =>
+            {
+                try
+                {
+                    await next();
+                }
+                catch (Exception ex)
+                {
+                    context.Response.StatusCode = 500;
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync(
+                        Newtonsoft.Json.JsonConvert.SerializeObject(new
+                        {
+                            error = ex.Message,
+                            inner = ex.InnerException?.Message
+                        })
+                    );
+                }
+            });
 
             app.UseRouting();
             app.UseCors(allowedOrigins);
