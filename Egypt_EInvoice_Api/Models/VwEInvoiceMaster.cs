@@ -1,17 +1,22 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Egypt_EInvoice_Api.Models
 {
     public class VwEInvoiceMaster
     {
-
         public string IssuerType { get; set; }
         public string IssuerId { get; set; }
         public string IssuerName { get; set; }
+        public string InternalId { get; set; }
+        public string BillNo { get; set; }
+        public DateTime? DateTimeIssued { get; set; }
+        public bool? IsUploaded { get; set; }
+        public Guid? TypeGuid { get; set; }
+        public DateTime? Date { get; set; }
+        public Guid? Guid { get; set; }
+        public string EInvoiceGuid { get; set; }
         public string branchId { get; set; }
         public string IssuerCountryCoder { get; set; }
         public string IssuerGovernate { get; set; }
@@ -38,10 +43,7 @@ namespace Egypt_EInvoice_Api.Models
         public string ReceiverLandMark { get; set; }
         public string DocumentType { get; set; }
         public string DocumentTypeVersion { get; set; }
-        public DateTime DateTimeIssued { get; set; }
         public string ActivityCode { get; set; }
-        [Key]
-        public string InternalId { get; set; }
         public string PurchaseOrderReference { get; set; }
         public string PurchaseOrderDescription { get; set; }
         public string SalesOrderReference { get; set; }
@@ -59,27 +61,14 @@ namespace Egypt_EInvoice_Api.Models
         public string DeliveryExportPort { get; set; }
         public string DeliveryCountryOfOrigin { get; set; }
         public string DeliveryTerms { get; set; }
-        public double? TotalSalesAmount { get; set; }
-        public double? TotalDiscountAmount { get; set; }
-        public double? NetAmount { get; set; }
-        public double? TotalAmount { get; set; }
-        public string EInvoiceGuid { get; set; }
-        public bool? IsUploaded { get; set; }
 
-        public Guid? TypeGuid { get; set; }
-
-        public DateTime? Date { get; set; }
-        public Guid? Guid { get; set; }
-
+        // SQL float → C# double
         public double? AddTax { get; set; }
-
-        public string BillNo { get; set; }
-
         public double? ExtraDiscountAmount { get; set; }
         public double? TotalItemsDiscountAmount { get; set; }
-
-
-
-
+        public double? NetAmount { get; set; }
+        public double? TotalAmount { get; set; }
+        public double? TotalDiscountAmount { get; set; }
+        public double? TotalSalesAmount { get; set; }
     }
 }

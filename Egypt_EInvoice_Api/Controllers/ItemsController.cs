@@ -19,11 +19,20 @@ namespace Egypt_EInvoice_Api.Controllers
     public class ItemsController : ControllerBase
     {
         private readonly IBaseRepos<VWItem> itemRepos;
-        public ItemsController(IBaseRepos<VWItem> itemRepos)
+        private readonly IConfiguration _configuration; // ← أضف
+
+        public ItemsController(IBaseRepos<VWItem> itemRepos, IConfiguration configuration) // ← أضف
         {
             this.itemRepos = itemRepos;
+            this._configuration = configuration; // ← أضف
         }
 
+        // ← helper method واحدة بدل التكرار
+        private DateTime? GetActiveTo()
+        {
+            int years = _configuration.GetValue<int>("Settings:ItemCodeActiveToYears", 0);
+            return years == 0 ? (DateTime?)null : DateTime.Now.AddYears(years);
+        }
 
         [HttpGet]
         [Route("GetAll")]
@@ -32,45 +41,6 @@ namespace Egypt_EInvoice_Api.Controllers
             return this.itemRepos.GetAll();
         }
 
-        //[HttpPut]
-        //[Route("Update")]
-        //public VWItem Update(VWItem item)
-        //{
-        //    IConfigurationRoot configuration = new ConfigurationBuilder()
-        //                                      .SetBasePath(Directory.GetCurrentDirectory())
-        //                                      .AddJsonFile("appsettings.json")
-        //                                      .Build();
-        //    var connectionString = configuration.GetConnectionString("EInvoiceDb");
-
-
-        //    using (SqlConnection con = new SqlConnection($"{connectionString}"))
-        //    {
-        //        try
-        //        {
-
-        //            con.Open();
-        //            StringBuilder str = new StringBuilder();
-        //            str.Append("update Mats");
-        //            str.AppendFormat(" set GS1Code = '{0}'", item.GS1Code);
-        //            str.AppendFormat(", EGSCode = '{0}'", item.EGSCode);
-        //            str.AppendFormat(", GPCCode = '{0}'", item.GPCCode);
-        //            str.AppendFormat("where Guid = '{0}'", item.Code);
-        //            SqlCommand comm = new SqlCommand(str.ToString(), con);
-        //            comm.ExecuteNonQuery();
-        //            con.Close();
-
-        //        }
-        //        catch (Exception ex)
-        //        {
-
-
-        //        }
-        //        return item;
-        //    }
-
-        //    //return this.itemRepos.Update(item);
-        //}
-
         [HttpPut]
         [HttpPost]
         [Route("Update")]
@@ -78,17 +48,11 @@ namespace Egypt_EInvoice_Api.Controllers
         {
             try
             {
-                IConfigurationRoot configuration = new ConfigurationBuilder()
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile("appsettings.json")
-                    .Build();
-
-                var connectionString = configuration.GetConnectionString("EInvoiceDb");
+                var connectionString = _configuration.GetConnectionString("EInvoiceDb"); // ← استخدم الـ injected config
 
                 using (SqlConnection con = new SqlConnection(connectionString))
                 {
                     con.Open();
-
                     StringBuilder str = new StringBuilder();
                     str.Append("UPDATE Mats ");
                     str.Append("SET GS1Code = @GS1Code, ");
@@ -101,22 +65,15 @@ namespace Egypt_EInvoice_Api.Controllers
                     comm.Parameters.AddWithValue("@EGSCode", item.EGSCode);
                     comm.Parameters.AddWithValue("@GPCCode", item.GPCCode);
                     comm.Parameters.AddWithValue("@Guid", item.Code);
-
                     comm.ExecuteNonQuery();
                 }
-
                 return Ok(item);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    Message = "Error occurred while updating item",
-                    Error = ex.Message
-                });
+                return StatusCode(500, new { Message = "Error occurred while updating item", Error = ex.Message });
             }
         }
-
 
         [HttpGet]
         [Route("GetItemsByGroup")]
@@ -125,67 +82,13 @@ namespace Egypt_EInvoice_Api.Controllers
             return this.itemRepos.GetAll().Where(x => x.GroupGuid == groupGuid).ToList();
         }
 
-        //
-
         [HttpPost]
         [Route("Add")]
         public VWItem Add(VWItem item)
         {
             return this.itemRepos.Add(item);
         }
-        //[HttpPost]
-        //[Route("UploadCode")]
-        //public VWItem UploadCode(VWItem item)
 
-        //{
-        //    EInvoiceModel.ESGItem obj = new EInvoiceModel.ESGItem();
-
-        //    obj.codeType = "EGS";
-        //    //obj.activeFrom = DateTime.Now.ToString("M/dd/yyyy");
-        //    //obj.activeTo = DateTime.Now.AddYears(1).ToString("M/dd/yyyy");
-        //    obj.activeFrom = DateTime.Now;
-        //   // obj.activeTo = DateTime.Now.AddYears(1);
-        //   // obj.codeName = item.LatinName;
-        //    obj.codeName = item.Name;
-
-
-        //    obj.codeNameAr = item.Name;
-        //   // obj.description = item.LatinName;
-        //    obj.description = item.Name;
-
-        //    obj.descriptionAr = item.Name;
-        //    obj.itemCode = item.EGSCode;
-        //    obj.linkedCode = "";
-        //    obj.parentCode = item.GPCCode;
-        //    obj.requestReason = "New Product";
-
-
-        //    //obj.codeType = "EGS";
-        //    //obj.parentCode = "10000051";
-        //    //obj.itemCode = "EG-113317713-5689";
-        //    //obj.codeName = "Test Code 1";
-        //    //obj.codeNameAr = "1 كود تجريبي";
-        //    //obj.activeFrom = DateTime.Now;
-        //    //obj.activeTo = DateTime.Now.AddYears(1);
-        //    //obj.description = "Description of code 1";
-        //    //obj.descriptionAr = " 1 وصف الكود بالعربي";
-        //    //obj.requestReason = "Request reason text";
-
-        //    List<EInvoiceModel.ESGItem> list = new List<EInvoiceModel.ESGItem>();
-        //    list.Add(obj);
-        //    EInvoiceGovManager EGovmanager = new EInvoiceGovManager();
-        //    var loginResponse = EGovmanager.Login();
-        //    if (loginResponse != null)
-        //    {
-
-        //        EGovmanager.CreateESGCode(list);
-        //        return item;
-
-
-
-        //    }
-        //    return null;
-        //}
         [HttpPost]
         [Route("UploadCode")]
         public async Task<IActionResult> UploadCode([FromBody] VWItem item)
@@ -196,7 +99,7 @@ namespace Egypt_EInvoice_Api.Controllers
                 {
                     codeType = "EGS",
                     activeFrom = DateTime.Now,
-                    activeTo = DateTime.Now.AddYears(1), // ضبط ActiveTo تلقائيًا لمدة سنة
+                    activeTo = GetActiveTo(), // ← من appsettings
                     codeName = item.Name,
                     codeNameAr = item.Name,
                     description = item.Name,
@@ -208,9 +111,8 @@ namespace Egypt_EInvoice_Api.Controllers
                 };
 
                 var list = new List<EInvoiceModel.ESGItem> { obj };
-
                 EInvoiceGovManager EGovmanager = new EInvoiceGovManager();
-                var loginResponse =  EGovmanager.Login();
+                var loginResponse = EGovmanager.Login();
 
                 if (loginResponse == null)
                     return Unauthorized("Login to E-Invoice failed");
@@ -218,80 +120,15 @@ namespace Egypt_EInvoice_Api.Controllers
                 var etaResult = await EGovmanager.CreateESGCodeAsync(list);
 
                 if (!etaResult.IsSuccess)
-                {
-                    return BadRequest(new
-                    {
-                        Message = "ETA rejected the code",
-                        EtaStatus = etaResult.StatusCode,
-                        EtaResponse = etaResult.RawResponse
-                    });
-                }
+                    return BadRequest(new { Message = "ETA rejected the code", EtaStatus = etaResult.StatusCode, EtaResponse = etaResult.RawResponse });
 
-                return Ok(new
-                {
-                    Message = "Code submitted successfully",
-                    EtaResponse = etaResult.RawResponse
-                });
+                return Ok(new { Message = "Code submitted successfully", EtaResponse = etaResult.RawResponse });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    Message = "Error while uploading EGS code",
-                    Error = ex.Message
-                });
+                return StatusCode(500, new { Message = "Error while uploading EGS code", Error = ex.Message });
             }
         }
-
-
-
-
-        //[HttpPost]
-        //[Route("UploadCodes")]
-        //public List<VWItem> UploadCodes(List<VWItem> itemlist)
-
-        //{
-        //    List<EInvoiceModel.ESGItem> list = new List<EInvoiceModel.ESGItem>();
-
-        //    foreach (var item in itemlist)
-        //    {
-        //        EInvoiceModel.ESGItem obj = new EInvoiceModel.ESGItem();
-        //        obj.codeType = "EGS";
-        //        //obj.activeFrom = DateTime.Now.ToString("M/dd/yyyy");
-        //        //obj.activeTo = DateTime.Now.AddYears(1).ToString("M/dd/yyyy");
-        //        obj.activeFrom = DateTime.Now;
-        //       // obj.activeTo = DateTime.Now.AddYears(1);
-        //       // obj.codeName = item.LatinName;
-        //        obj.codeName = item.Name;
-
-        //        obj.codeNameAr = item.Name;
-        //       // obj.description = item.LatinName;
-        //        obj.description = item.Name;
-
-        //        obj.descriptionAr = item.Name;
-        //        obj.itemCode = item.EGSCode;
-        //        obj.linkedCode = "";
-        //        obj.parentCode = item.GPCCode;
-        //        obj.requestReason = "New Product";
-        //        list.Add(obj);
-
-
-        //    }
-
-
-
-
-        //    EInvoiceGovManager EGovmanager = new EInvoiceGovManager();
-        //    var loginResponse = EGovmanager.Login();
-        //    if (loginResponse != null)
-        //    {
-
-        //            EGovmanager.CreateESGCode(list);
-
-
-        //    }
-        //    return itemlist;
-        //}
 
         [HttpPost]
         [Route("UploadCodes")]
@@ -302,11 +139,13 @@ namespace Egypt_EInvoice_Api.Controllers
                 if (itemlist == null || !itemlist.Any())
                     return BadRequest("Item list is empty");
 
+                var activeTo = GetActiveTo(); // ← احسبها مرة واحدة بس
+
                 List<EInvoiceModel.ESGItem> list = itemlist.Select(item => new EInvoiceModel.ESGItem
                 {
                     codeType = "EGS",
                     activeFrom = DateTime.Now,
-                    activeTo = DateTime.Now.AddYears(1), // ضبط ActiveTo تلقائيًا لمدة سنة
+                    activeTo = activeTo, // ← من appsettings
                     codeName = item.Name,
                     codeNameAr = item.Name,
                     description = item.Name,
@@ -318,7 +157,7 @@ namespace Egypt_EInvoice_Api.Controllers
                 }).ToList();
 
                 EInvoiceGovManager EGovmanager = new EInvoiceGovManager();
-                var loginResponse =  EGovmanager.Login();
+                var loginResponse = EGovmanager.Login();
 
                 if (loginResponse == null)
                     return Unauthorized("E-Invoice login failed");
@@ -326,32 +165,14 @@ namespace Egypt_EInvoice_Api.Controllers
                 var etaResult = await EGovmanager.CreateESGCodeAsync(list);
 
                 if (!etaResult.IsSuccess)
-                {
-                    return BadRequest(new
-                    {
-                        Message = "ETA rejected the codes",
-                        EtaStatus = etaResult.StatusCode,
-                        EtaResponse = etaResult.RawResponse
-                    });
-                }
+                    return BadRequest(new { Message = "ETA rejected the codes", EtaStatus = etaResult.StatusCode, EtaResponse = etaResult.RawResponse });
 
-                return Ok(new
-                {
-                    Message = "Codes submitted successfully",
-                    EtaResponse = etaResult.RawResponse
-                });
+                return Ok(new { Message = "Codes submitted successfully", EtaResponse = etaResult.RawResponse });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    Message = "Error while uploading EGS codes",
-                    Error = ex.Message
-                });
+                return StatusCode(500, new { Message = "Error while uploading EGS codes", Error = ex.Message });
             }
         }
-
-
     }
-
 }

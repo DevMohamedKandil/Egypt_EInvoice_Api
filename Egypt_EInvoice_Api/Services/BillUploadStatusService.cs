@@ -23,12 +23,7 @@ namespace Egypt_EInvoice_Api.Services
         {
             Bill bill = GetBill(billGuid);
             bill.IsUploaded = true;
-            bill.EInvoiceGuid = acceptedDocument?.uuid ?? bill.EInvoiceGuid;
-            bill.SubmissionNotes = TrimSubmissionNotes(
-                "Accepted by ETA"
-                + AppendValue("SubmissionUUID", submissionUuid)
-                + AppendValue("DocumentUUID", acceptedDocument?.uuid)
-                + AppendValue("DocumentLongId", acceptedDocument?.longId));
+            bill.EInvoiceGuid = acceptedDocument?.uuid ?? bill.EInvoiceGuid; 
 
             billRepos.Update(bill);
 
@@ -46,10 +41,7 @@ namespace Egypt_EInvoice_Api.Services
         {
             Bill bill = GetBill(billGuid);
             bill.IsUploaded = false;
-            bill.EInvoiceGuid = null;
-            bill.SubmissionNotes = TrimSubmissionNotes(
-                (string.IsNullOrWhiteSpace(status) ? "Rejected by ETA" : status)
-                + AppendValue("Reason", reason));
+            bill.EInvoiceGuid = null; 
 
             billRepos.Update(bill);
 
@@ -67,10 +59,7 @@ namespace Egypt_EInvoice_Api.Services
         {
             Bill bill = GetBill(billGuid);
             if (bill.IsUploaded != true)
-                bill.IsUploaded = false;
-
-            bill.SubmissionNotes = TrimSubmissionNotes("Duplicate payload detected by ETA" + AppendValue("Message", message));
-
+                bill.IsUploaded = false; 
             billRepos.Update(bill);
 
             logger.LogWarning(

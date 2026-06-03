@@ -31,11 +31,8 @@ namespace Egypt_EInvoice_Api.Models
 
 
         public int? CurrencyPtr { get; set; }
-        public double? CurrencyVal { get; set; }
         public string Notes { get; set; }
-        public double? Total { get; set; }
-        public double? Paid { get; set; }
-        public double? Remain { get; set; }
+        public double? CurrencyVal { get; set; }
         public int? AccPaidNumber { get; set; }
         public Guid? AccPaidGuid { get; set; }
         public int? AccRemianNumber { get; set; }
@@ -136,16 +133,12 @@ namespace Egypt_EInvoice_Api.Models
         public Guid? PolicyGuid { get; set; }
         public byte? ShippingKind { get; set; }
         public bool? IsUploaded { get; set; }
-        public string EInvoiceGuid { get; set; }
-        public string SubmissionNotes { get; set; }
+        public string EInvoiceGuid { get; set; } 
         public DateTime? SupplyDate { get; set; }
-       
-
-
-
-
-
-
-
+        //
+        public double? Total { get; set; }
+        public double? Paid { get; set; }
+        public double? Remain { get; set; }
+ 
     }
 }

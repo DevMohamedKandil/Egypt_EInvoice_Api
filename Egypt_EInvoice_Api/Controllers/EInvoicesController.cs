@@ -27,6 +27,7 @@ namespace Egypt_EInvoice_Api.Controllers
     {
         private readonly IBaseRepos<VWEInvoice> eInvoiceRepos;
         private readonly IBaseRepos<VwEInvoiceMaster> eInvoiceMasterRepos;
+        private readonly IBaseRepos<VWInvoiceLine> invoiceLineRepos;
 
         private readonly IConfiguration Configuration;
 
@@ -36,58 +37,63 @@ namespace Egypt_EInvoice_Api.Controllers
         private readonly IBillUploadStatusService billUploadStatusService;
         private readonly ILogger<EInvoicesController> logger;
 
-
-        public EInvoicesController(IBaseRepos<VWEInvoice> eInvoiceRepos,
+        public EInvoicesController(
+            IBaseRepos<VWEInvoice> eInvoiceRepos,
             IBaseRepos<VwEInvoiceMaster> eInvoiceMasterRepos,
-             IConfiguration configuration,
-             EInvoiceGovManager eta,
-             IInvoiceSigningService invoiceSigningService,
-             IEtaSubmissionService etaSubmissionService,
-             IBillUploadStatusService billUploadStatusService,
-             ILogger<EInvoicesController> logger
-
+            IBaseRepos<VWInvoiceLine> invoiceLineRepos,
+            IConfiguration configuration,
+            EInvoiceGovManager eta,
+            IInvoiceSigningService invoiceSigningService,
+            IEtaSubmissionService etaSubmissionService,
+            IBillUploadStatusService billUploadStatusService,
+            ILogger<EInvoicesController> logger
             )
         {
             this.eInvoiceRepos = eInvoiceRepos;
             this.eInvoiceMasterRepos = eInvoiceMasterRepos;
+            this.invoiceLineRepos = invoiceLineRepos;
             Configuration = configuration;
             _eta = eta;
             this.invoiceSigningService = invoiceSigningService;
             this.etaSubmissionService = etaSubmissionService;
             this.billUploadStatusService = billUploadStatusService;
             this.logger = logger;
-
-
-            //this.invoiceLineRepos = invoiceLineRepos;
-
         }
 
         [HttpGet]
         [Route("GetUnUploadedInvoice")]
         public List<VwEInvoiceMaster> GetAllUnUploadedInvoice()
         {
-            return this.eInvoiceMasterRepos.GetAll().Where(x => x.IsUploaded == null || x.IsUploaded == false).ToList();
+            try
+            {
+                return this.eInvoiceMasterRepos.GetAll()
+                    .Where(x => x.IsUploaded == null || x.IsUploaded == false)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Failed to get un-uploaded invoices");
+                return new List<VwEInvoiceMaster>();
+            }
         }
+
         [HttpGet]
         [Route("GetUnUploadedInvoices")]
         public IActionResult GetAllUnUploadedInvoices(
-    [FromQuery(Name = "billType")] Guid? billType = null,
-    [FromQuery(Name = "DateFrom")] DateTime? dateFrom = null,
-    [FromQuery(Name = "DateTo")] DateTime? dateTo = null)
+            [FromQuery(Name = "BillType")] Guid? billType = null,
+            [FromQuery(Name = "DateFrom")] DateTime? dateFrom = null,
+            [FromQuery(Name = "DateTo")] DateTime? dateTo = null)
         {
             try
             {
                 var query = this.eInvoiceMasterRepos.GetAll()?.AsQueryable()
                             ?? Enumerable.Empty<VwEInvoiceMaster>().AsQueryable();
 
-                // Filter by IsUploaded
                 query = query.Where(x => x.IsUploaded == null || x.IsUploaded == false);
 
-                // Optional BillType filter
                 if (billType.HasValue)
                     query = query.Where(x => x.TypeGuid == billType.Value);
 
-                // Optional date range filter
                 if (dateFrom.HasValue && dateTo.HasValue)
                     query = query.Where(x => x.Date.HasValue && x.Date.Value >= dateFrom.Value && x.Date.Value <= dateTo.Value);
 
@@ -95,7 +101,6 @@ namespace Egypt_EInvoice_Api.Controllers
             }
             catch (Exception ex)
             {
-                // ترجع رسالة الخطأ مع كود 400 أو 500 حسب رغبتك
                 return BadRequest(new { Message = "حدث خطأ أثناء تنفيذ العملية", Error = ex.Message });
             }
         }
@@ -104,157 +109,148 @@ namespace Egypt_EInvoice_Api.Controllers
         [Route("GetUploadedInvoices")]
         public List<VwEInvoiceMaster> GetUploadedInvoices()
         {
-            return this.eInvoiceMasterRepos.GetAll().Where(x => x.IsUploaded == true).ToList();
+            try
+            {
+                return this.eInvoiceMasterRepos.GetAll()
+                    .Where(x => x.IsUploaded == true)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Failed to get uploaded invoices");
+                return new List<VwEInvoiceMaster>();
+            }
         }
+
         [HttpGet]
         [Route("GetAllInvoices")]
         public List<VWEInvoice> GetAll()
         {
-            return this.eInvoiceRepos.GetAll();
+            try
+            {
+                return this.eInvoiceRepos.GetAll();
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Failed to get all invoices");
+                return new List<VWEInvoice>();
+            }
         }
-
 
         [HttpPost]
         [Route("CreateESGCode")]
         public void CreateESGCode()
-
         {
             var loginResponse = _eta.Login();
             if (loginResponse != null)
             {
-
                 // obj.CreateESGCode();
-                //  return result;
             }
-            // return "";
         }
-
 
         [HttpPost]
         [Route("UploadInvoice")]
         public BillResponse UploadInvoice(VwEInvoiceMasterdto bill)
-
         {
             Appsettings settings = Configuration.GetRequiredSection("Settings").Get<Appsettings>();
-            // string ErrorMessage = string.Empty;
+
             var item = this.eInvoiceMasterRepos.FindByGuid(Guid.Parse(bill.InternalId));
 
             int tempint = 0;
-
-            //item.ErrorMessage = "";
 
             EInvoiceModel.Document obj = new EInvoiceModel.Document();
             List<EInvoiceModel._documents> List = new List<EInvoiceModel._documents>();
 
             EInvoiceModel.Issuer issuer = new EInvoiceModel.Issuer();
-
             EInvoiceModel.Address Address = new EInvoiceModel.Address();
-
             EInvoiceModel.Receiver Receiver = new EInvoiceModel.Receiver();
-
             EInvoiceModel.Payment Payment = new EInvoiceModel.Payment();
-
 
             issuer.name = item.IssuerName;
             issuer.id = item.IssuerId;
 
+            // ===================== Issuer Validations =====================
+
             if (string.IsNullOrEmpty(item.IssuerId))
             {
-                // item.ErrorMessage = "Issuer Id  is required";
                 return new BillResponse()
                 {
                     BillNo = item.BillNo,
                     Msg = "Issuer Tax Number  is required",
                     BillGuid = item.InternalId
                 };
-
             }
             else
             {
                 if (item.IssuerType == "B")
                 {
-                    int numbers = int.Parse(item.IssuerId.Length.ToString());
-
-                    if (numbers < 9 || numbers > 9)
+                    if (item.IssuerId.Length != 9)
                     {
-                        return
-                   new BillResponse()
-                   {
-                       BillNo = item.BillNo,
-                       Msg = "Issuer Tax Number should be 9 digits",
-                       BillGuid = item.InternalId
-                   };
-
+                        return new BillResponse()
+                        {
+                            BillNo = item.BillNo,
+                            Msg = "Issuer Tax Number should be 9 digits",
+                            BillGuid = item.InternalId
+                        };
                     }
                 }
 
                 if (item.IssuerType == "P")
                 {
-                    int numbers = int.Parse(item.IssuerId.Length.ToString());
-
-                    if (numbers < 14 || numbers > 14)
+                    if (item.IssuerId.Length != 14)
                     {
-                        return
-                   new BillResponse()
-                   {
-                       BillNo = item.BillNo,
-                       Msg = "Issuer National Id should be 14 digits",
-                       BillGuid = item.InternalId
-                   };
-
+                        return new BillResponse()
+                        {
+                            BillNo = item.BillNo,
+                            Msg = "Issuer National Id should be 14 digits",
+                            BillGuid = item.InternalId
+                        };
                     }
                 }
             }
+
+            // ===================== Receiver Validations =====================
+
             if (string.IsNullOrEmpty(item.ReceiverId))
             {
-               
-                return
-                    new BillResponse()
-                    {
-                        BillNo = item.BillNo,
-                        Msg = "Receiver Tax Number is required",
-                        BillGuid = item.InternalId
-                    };
-               
-
-
+                return new BillResponse()
+                {
+                    BillNo = item.BillNo,
+                    Msg = "Receiver Tax Number is required",
+                    BillGuid = item.InternalId
+                };
             }
             else
             {
                 if (item.ReceiverType == "B")
                 {
-                    int numbers = int.Parse(item.ReceiverId.Length.ToString());
-                    
-                    if (numbers < 9 || numbers > 9)
+                    if (item.ReceiverId.Length != 9)
                     {
-                        return
-                   new BillResponse()
-                   {
-                       BillNo = item.BillNo,
-                       Msg = "Receiver Tax Number should be 9 digits",
-                       BillGuid = item.InternalId
-                   };
-
+                        return new BillResponse()
+                        {
+                            BillNo = item.BillNo,
+                            Msg = "Receiver Tax Number should be 9 digits",
+                            BillGuid = item.InternalId
+                        };
                     }
                 }
+
                 if (item.ReceiverType == "P")
                 {
-                    int numbers = int.Parse(item.ReceiverId.Length.ToString());
-
-                    if (numbers < 14 || numbers > 14)
+                    if (item.ReceiverId.Length != 14)
                     {
-                        return
-                   new BillResponse()
-                   {
-                       BillNo = item.BillNo,
-                       Msg = "Receiver National Id should be 14 digits",
-                       BillGuid = item.InternalId
-                   };
-
+                        return new BillResponse()
+                        {
+                            BillNo = item.BillNo,
+                            Msg = "Receiver National Id should be 14 digits",
+                            BillGuid = item.InternalId
+                        };
                     }
                 }
             }
-            //
+
+            // ===================== Issuer Address Validations =====================
+
             if (string.IsNullOrEmpty(item.IssuerCountryCoder))
             {
                 return new BillResponse()
@@ -305,7 +301,8 @@ namespace Egypt_EInvoice_Api.Controllers
                 };
             }
 
-            //
+            // ===================== Receiver Address Validations =====================
+
             if (string.IsNullOrEmpty(item.ReceiverCountryCode))
             {
                 return new BillResponse()
@@ -355,7 +352,8 @@ namespace Egypt_EInvoice_Api.Controllers
                     BillGuid = item.InternalId
                 };
             }
-            //
+
+            // ===================== Branch Validation =====================
 
             if (string.IsNullOrEmpty(item.branchId) || int.TryParse(item.branchId, out tempint) == false)
             {
@@ -365,12 +363,11 @@ namespace Egypt_EInvoice_Api.Controllers
                     Msg = "branch Id  is required (number)",
                     BillGuid = item.InternalId
                 };
-
             }
 
+            // ===================== Build Issuer Address =====================
 
             Address = new EInvoiceModel.Address();
-
             Address.governate = item.IssuerGovernate;
             Address.regionCity = item.IssuerRegionCity;
             Address.street = item.IssuerStreet;
@@ -387,14 +384,14 @@ namespace Egypt_EInvoice_Api.Controllers
             issuer.type = item.IssuerType;
 
             obj.issuer = issuer;
+
+            // ===================== Build Receiver =====================
+
             Receiver.id = item.ReceiverId;
-
             Receiver.name = item.ReceiverName;
-            Receiver.type = item.ReceiverType == null ? "P" : item.ReceiverType;
-
+            Receiver.type = item.ReceiverType ?? "P";
 
             Address = new EInvoiceModel.Address();
-
             Address.governate = item.ReceiverGovernate;
             Address.regionCity = item.ReceiverRegionCity;
             Address.street = item.ReceiverStreet;
@@ -404,25 +401,23 @@ namespace Egypt_EInvoice_Api.Controllers
             Address.landmark = item.ReceiverLandMark;
             Address.room = item.ReceiverRoom;
             Address.postalCode = item.ReceiverPostalCode;
-            
             Address.branchId = item.branchId;
-            
             Address.additionalInformation = item.ReceiverAdditionalInformation;
+
             Receiver.address = Address;
 
             obj.receiver = Receiver;
 
+            // ===================== Build Document Header =====================
+
             obj.documentType = item.DocumentType;
             obj.documentTypeVersion = item.DocumentTypeVersion;
-            DateTime correctDate = item.DateTimeIssued.AddHours(-2);
+
+            DateTime correctDate = item.DateTimeIssued?.AddHours(-2) ?? DateTime.UtcNow;
             obj.dateTimeIssued = correctDate.ToString("yyyy-MM-dd") + "T" + correctDate.ToString("HH:mm:ss") + "Z";
-            //"2022-02-17T23:59:59Z";
 
             obj.taxpayerActivityCode = item.ActivityCode;
-
-           
-            obj.internalID = (settings.InvoiceTitle == 1)?item.BillNo:item.InternalId;
-            
+            obj.internalID = (settings.InvoiceTitle == 1) ? item.BillNo : item.InternalId;
 
             if (string.IsNullOrEmpty(item.InternalId))
             {
@@ -432,7 +427,6 @@ namespace Egypt_EInvoice_Api.Controllers
                     Msg = "Internal ID is required",
                     BillGuid = item.InternalId
                 };
-
             }
 
             obj.purchaseOrderReference = item.PurchaseOrderReference;
@@ -441,8 +435,9 @@ namespace Egypt_EInvoice_Api.Controllers
             obj.salesOrderDescription = item.SalesOrderDescription;
             obj.proformaInvoiceNumber = item.ProformaInvoiceNumber;
 
-            obj.payment = new EInvoiceModel.Payment();
+            // ===================== Payment =====================
 
+            obj.payment = new EInvoiceModel.Payment();
             obj.payment.bankAccountIBAN = item.PaymentBankAccountIBAN;
             obj.payment.bankAccountNo = item.PaymentBankAccountNo;
             obj.payment.bankAddress = item.PaymentBankAddress;
@@ -450,36 +445,32 @@ namespace Egypt_EInvoice_Api.Controllers
             obj.payment.swiftCode = item.PaymentSwiftCode;
             obj.payment.terms = item.PaymentTerms;
 
-            obj.delivery = new EInvoiceModel.Delivery();
+            // ===================== Delivery =====================
 
+            obj.delivery = new EInvoiceModel.Delivery();
             obj.delivery.exportPort = item.DeliveryExportPort;
             obj.delivery.approach = item.DeliveryApproch;
             obj.delivery.countryOfOrigin = item.DeliveryCountryOfOrigin;
-            
-            obj.delivery.dateValidity = item.DeliveryDateValidity == null ? "" : item.DeliveryDateValidity;
-
+            obj.delivery.dateValidity = item.DeliveryDateValidity ?? "";
             obj.delivery.grossWeight = 0;
             obj.delivery.netWeight = 0;
             obj.delivery.packaging = item.DeliveryPackaging;
             obj.delivery.terms = item.DeliveryTerms;
 
-
+            // ===================== Invoice Lines =====================
 
             EInvoiceModel.InvoiceLine invoiceLine = new EInvoiceModel.InvoiceLine();
             List<VWInvoiceLine> invoicesitems = new List<VWInvoiceLine>();
 
             if (!string.IsNullOrEmpty(item.InternalId))
             {
-                BillItemsRepos invoiceLineRepos = new BillItemsRepos();
-
                 invoicesitems = invoiceLineRepos.SearchByGuid(Guid.Parse(item.InternalId));
                 var index = 0;
                 obj.invoiceLines = new InvoiceLine[invoicesitems.Count];
 
-
                 foreach (var item2 in invoicesitems)
                 {
-                    if (item2.itemCode == null || item2.itemCode == "")
+                    if (string.IsNullOrEmpty(item2.itemCode))
                     {
                         return new BillResponse()
                         {
@@ -488,141 +479,115 @@ namespace Egypt_EInvoice_Api.Controllers
                             BillGuid = item.InternalId
                         };
                     }
+
                     invoiceLine = new EInvoiceModel.InvoiceLine();
                     invoiceLine.description = item2.description;
                     invoiceLine.discount = new EInvoiceModel.Discount();
-                    if (item2.discAmount == 0)
-                    {
-                        invoiceLine.discount.amount = 0;
-                    }
-                    else
-                    {
-                        invoiceLine.discount.amount = Math.Round((decimal)item2.discAmount, 5);
-                    }
-                    if (item2.discRate == 0)
-                    { invoiceLine.discount.rate = 0; }
-                    else
-                    {
-                        invoiceLine.discount.rate = Math.Round((decimal)item2.discRate, 5);
-                    }
+
+                    invoiceLine.discount.amount = item2.discAmount == 0
+                        ? 0m
+                        : (decimal)Math.Round(item2.discAmount, 5);
+
+                    invoiceLine.discount.rate = item2.discRate == 0
+                        ? 0m
+                        : (decimal)Math.Round(item2.discRate, 5);
+
                     invoiceLine.internalCode = item2.internalCode;
                     invoiceLine.itemCode = item2.itemCode;
-                    if (item2.itemsDiscount == 0)
-                    {
-                        invoiceLine.itemsDiscount = 0;
-                    }
-                    else
-                    {
-                        invoiceLine.itemsDiscount = Math.Round((decimal)item2.itemsDiscount, 5);
-                    }
+
+                    invoiceLine.itemsDiscount = item2.itemsDiscount == 0
+                        ? 0d
+                        : Math.Round(item2.itemsDiscount, 5);
+
                     invoiceLine.itemType = item2.itemType;
-                    
-                    invoiceLine.netTotal =  Math.Round((decimal)item2.netTotal,5);
-                  
-                    invoiceLine.quantity =Math.Round((decimal)item2.quantity,5);
-                    invoiceLine.salesTotal = Math.Round((decimal)item2.salesTotal,5);
+                    invoiceLine.netTotal = Math.Round(item2.netTotal, 5);
+                    invoiceLine.quantity = Math.Round(item2.quantity, 5);
+                    invoiceLine.salesTotal = Math.Round(item2.salesTotal, 5);
 
-                    //////////////////////edit by kandil /////////////////////////
-                    // invoiceLine.total = Math.Round((decimal)item2.total,5);
+                    invoiceLine.total = Math.Round(item2.salesTotal + (item2.AddTax ?? 0d), 5);
 
-                    invoiceLine.total = Math.Round((decimal)item2.salesTotal + (decimal)item2.AddTax, 5); // Fixed: total = sales + tax
+                    invoiceLine.totalTaxableFees = item2.totalTaxableFees == 0
+                        ? 0d
+                        : item2.totalTaxableFees;
 
-                    if (item2.totalTaxableFees == 0)
-                    {
-                        invoiceLine.totalTaxableFees = 0;
-                    }
-                    else
-                    {
-                        invoiceLine.totalTaxableFees = (decimal)item2.totalTaxableFees;
-                    }
                     invoiceLine.unitType = "EA";
-                  
-                    if (item2.TaxPercent == 0)
-                    {
-                        invoiceLine.taxableItems = new TaxableItem[1];
-                        invoiceLine.taxableItems[0] = new TaxableItem()
-                        {
-                            taxType = "T1",
-                            amount = 0,
-                            subType = "V004",
-                            rate = 0
-
-
-                        };
-
-                    }
-                    else
-                    {
-                        invoiceLine.taxableItems = new TaxableItem[1];
-                        invoiceLine.taxableItems[0] = new TaxableItem()
-                        {
-                            taxType = "T1",
-                            amount =(decimal)item2.AddTax,
-                            subType = "V009",
-                            rate = (decimal)item2.TaxPercent 
-
-
-                        };
-                 
-
-                    }
-
-
-                    //invoiceLine.unitValue = new EInvoiceModel.UnitValue();
-
-                    //invoiceLine.unitValue.amountEGP =Math.Round( decimal.Parse(item2.amountEGP.ToString()),5);
-
-                    //invoiceLine.unitValue.currencySold = "EGP";
-                    /////////////////////////////////Edited Currency Code ////////////////////////////////////
-
-                    invoiceLine.unitValue = new EInvoiceModel.UnitValue();
-                    invoiceLine.unitValue.currencySold = (item2.currencySold ?? "");
-                    invoiceLine.unitValue.amountEGP = Math.Round((decimal)item2.amountEGP, 5);
-                    invoiceLine.unitValue.amountSold = 0;
-                    if (invoiceLine.unitValue.currencyNumber != 1 && item2.amountSold > 0)
-                    {
-                        invoiceLine.unitValue.amountSold = Math.Round((decimal)item2.amountSold, 5);
-                        invoiceLine.unitValue.currencyExchangeRate = Math.Round((decimal)item2.currencyExchangeRate, 5);
-                    }
-                    //////////////////////////////////////////////////////////////////////////////////////////
-
-
 
                     invoiceLine.valueDifference = item2.valueDifference;
-                                        
+
+                    invoiceLine.taxableItems = new TaxableItem[1];
+
+                    if (item2.TaxPercent == null || item2.TaxPercent == 0d)
+                    {
+                        invoiceLine.taxableItems[0] = new TaxableItem()
+                        {
+                            taxType = "T1",
+                            amount = 0m,
+                            subType = "V004",
+                            rate = 0m
+                        };
+                    }
+                    else
+                    {
+                        invoiceLine.taxableItems[0] = new TaxableItem()
+                        {
+                            taxType = "T1",
+                            amount = (decimal)(item2.AddTax ?? 0d),
+                            subType = "V009",
+                            rate = (decimal)(item2.TaxPercent ?? 0d)
+                        };
+                    }
+
+                    invoiceLine.unitValue = new EInvoiceModel.UnitValue();
+                    invoiceLine.unitValue.currencySold = item2.currencySold ?? "";
+                    invoiceLine.unitValue.amountEGP = (decimal)Math.Round(item2.amountEGP, 5);
+                    invoiceLine.unitValue.amountSold = 0m;
+
+                    if (invoiceLine.unitValue.currencyNumber != 1 && item2.amountSold > 0)
+                    {
+                        invoiceLine.unitValue.amountSold = (decimal)Math.Round(item2.amountSold, 5);
+                        invoiceLine.unitValue.currencyExchangeRate = (decimal)Math.Round(item2.currencyExchangeRate, 5);
+                    }
+
                     obj.invoiceLines[index] = invoiceLine;
-                    
-
                     index++;
-
-                 
-
                 }
-
             }
 
-            obj.totalSalesAmount = item.TotalSalesAmount.HasValue ? Math.Round(decimal.Parse(item.TotalSalesAmount.Value.ToString()), 5) : 0;
+            // ===================== Document Totals =====================
 
-            obj.totalDiscountAmount = item.TotalDiscountAmount.HasValue ? Math.Round(decimal.Parse(item.TotalDiscountAmount.Value.ToString()), 5) : 0;
+            obj.totalSalesAmount = item.TotalSalesAmount.HasValue
+                ? (decimal)Math.Round(item.TotalSalesAmount.Value, 5)
+                : 0m;
 
-            obj.netAmount = item.NetAmount.HasValue ? Math.Round(decimal.Parse(item.NetAmount.Value.ToString()), 5) : 0;
+            obj.totalDiscountAmount = item.TotalDiscountAmount.HasValue
+                ? (decimal)Math.Round(item.TotalDiscountAmount.Value, 5)
+                : 0m;
 
-            obj.extraDiscountAmount = item.ExtraDiscountAmount.HasValue ? Math.Round((decimal)item.ExtraDiscountAmount.Value, 5) : 0;
-            obj.totalItemsDiscountAmount = item.TotalItemsDiscountAmount.HasValue ? Math.Round((decimal)item.TotalItemsDiscountAmount.Value, 5) : 0;
-            //
-            // obj.totalAmount = item.TotalAmount.HasValue ? Math.Round(decimal.Parse(item.TotalAmount.Value.ToString()), 5) : 0;   
-            //
-            // الحل الصحيح لما يكون double? (مش decimal?)
-            
-            obj.totalAmount = Math.Round((decimal)((item.TotalSalesAmount ?? 0d) + (item.AddTax ?? 0d)), 5);
+            obj.netAmount = item.NetAmount.HasValue
+                ? (decimal)Math.Round(item.NetAmount.Value, 5)
+                : 0m;
+
+            obj.extraDiscountAmount = item.ExtraDiscountAmount.HasValue
+                ? (decimal)Math.Round(item.ExtraDiscountAmount.Value, 5)
+                : 0m;
+
+            obj.totalItemsDiscountAmount = item.TotalItemsDiscountAmount.HasValue
+                ? (decimal)Math.Round(item.TotalItemsDiscountAmount.Value, 5)
+                : 0m;
+
+            obj.totalAmount = (decimal)Math.Round(
+                (item.TotalSalesAmount ?? 0d) + (item.AddTax ?? 0d),
+                5);
+
             obj.taxTotals = new TaxTotal[1];
             obj.taxTotals[0] = new TaxTotal
             {
                 taxType = "T1",
-                amount =(decimal)item.AddTax
-
+                amount = (decimal)(item.AddTax ?? 0d)
             };
-            
+
+            // ===================== Serialize & Save (unsigned - root folder) =====================
+
             string output2 = JsonConvert.SerializeObject(obj, new JsonSerializerSettings()
             {
                 FloatFormatHandling = FloatFormatHandling.String,
@@ -631,12 +596,13 @@ namespace Egypt_EInvoice_Api.Controllers
                 DateParseHandling = DateParseHandling.None,
                 NullValueHandling = NullValueHandling.Ignore
             });
-          
-
 
             SaveInvoice(output2, item.InternalId);
 
             JObject unsignedDocument = ParseDocumentJsonPreservingPrimitiveValues(output2);
+
+            // ===================== Sign =====================
+
             SignedInvoiceDocument signedInvoice;
             try
             {
@@ -649,6 +615,9 @@ namespace Egypt_EInvoice_Api.Controllers
                     "ETA signing failed. BillNo: {BillNo}, InternalId: {InternalId}",
                     item.BillNo,
                     item.InternalId);
+
+                // ← حفظ الفاتورة الفاشلة في مجلد Failed
+                SaveInvoice(output2, item.InternalId + "_failed", "Failed");
 
                 billUploadStatusService.MarkRejected(
                     Guid.Parse(item.InternalId),
@@ -665,7 +634,10 @@ namespace Egypt_EInvoice_Api.Controllers
             }
 
             string output3 = signedInvoice.SignedDocument.ToString(Formatting.None);
-            SaveInvoice(output3, item.InternalId + "_signed");
+
+            // ← حفظ الفاتورة الموقعة في مجلد Sent
+            SaveInvoice(output3, item.InternalId + "_signed", "Sent");
+
             logger.LogInformation(
                 "ETA final signed document prepared. BillNo: {BillNo}, InternalId: {InternalId}, CanonicalSha256: {CanonicalSha256}, SignatureBase64Length: {SignatureBase64Length}, SignedJson: {SignedJson}",
                 item.BillNo,
@@ -679,6 +651,8 @@ namespace Egypt_EInvoice_Api.Controllers
                 ["documents"] = new JArray(signedInvoice.SignedDocument)
             };
 
+            // ===================== Submit =====================
+
             try
             {
                 EtaSubmissionResult result = etaSubmissionService
@@ -688,6 +662,9 @@ namespace Egypt_EInvoice_Api.Controllers
 
                 if (result == null)
                 {
+                    // ← فشل الإرسال - احفظ في Failed
+                    SaveInvoice(output3, item.InternalId + "_submit_failed", "Failed");
+
                     billUploadStatusService.MarkRejected(
                         Guid.Parse(item.InternalId),
                         "NoResponse",
@@ -705,6 +682,7 @@ namespace Egypt_EInvoice_Api.Controllers
                 if (result.IsDuplicatePayload)
                 {
                     string duplicateMessage = "ETA rejected this retry because the request payload is identical to one sent in the last 10 minutes. Please wait and retry, or check ETA portal for the earlier submission.";
+
                     billUploadStatusService.MarkDuplicate(
                         Guid.Parse(item.InternalId),
                         duplicateMessage,
@@ -719,9 +697,14 @@ namespace Egypt_EInvoice_Api.Controllers
                 }
 
                 DocumetSubmitResponse etaResponse = result.Response;
+
                 if (etaResponse == null)
                 {
                     string failureMessage = EtaResponseFormatter.BuildRawFailureMessage(result);
+
+                    // ← فشل الإرسال - احفظ في Failed
+                    SaveInvoice(output3, item.InternalId + "_submit_failed", "Failed");
+
                     billUploadStatusService.MarkRejected(
                         Guid.Parse(item.InternalId),
                         "Failed",
@@ -763,6 +746,10 @@ namespace Egypt_EInvoice_Api.Controllers
                 if (etaResponse.rejectedDocuments != null && etaResponse.rejectedDocuments.Count > 0)
                 {
                     string rejectionMessage = EtaResponseFormatter.BuildRejectedDocumentsMessage(etaResponse.rejectedDocuments);
+
+                    // ← مرفوضة من ETA - احفظ في Failed
+                    SaveInvoice(output3, item.InternalId + "_rejected", "Failed");
+
                     billUploadStatusService.MarkRejected(
                         Guid.Parse(item.InternalId),
                         "Rejected",
@@ -776,6 +763,9 @@ namespace Egypt_EInvoice_Api.Controllers
                         BillGuid = item.InternalId
                     };
                 }
+
+                // ← فشل عام - احفظ في Failed
+                SaveInvoice(output3, item.InternalId + "_failed", "Failed");
 
                 billUploadStatusService.MarkRejected(
                     Guid.Parse(item.InternalId),
@@ -798,6 +788,9 @@ namespace Egypt_EInvoice_Api.Controllers
                     item.BillNo,
                     item.InternalId);
 
+                // ← exception في الإرسال - احفظ في Failed
+                SaveInvoice(output3, item.InternalId + "_exception", "Failed");
+
                 billUploadStatusService.MarkRejected(
                     Guid.Parse(item.InternalId),
                     "Exception",
@@ -811,45 +804,62 @@ namespace Egypt_EInvoice_Api.Controllers
                     BillGuid = item.InternalId
                 };
             }
-
         }
 
+        [HttpGet]
+        [Route("GetUploadedInvoices2")]
+        public IActionResult GetUploadedInvoices2(
+            [FromQuery(Name = "BillType")] Guid? billType = null,
+            [FromQuery(Name = "DateFrom")] DateTime? dateFrom = null,
+            [FromQuery(Name = "DateTo")] DateTime? dateTo = null)
+        {
+            try
+            {
+                var query = this.eInvoiceMasterRepos.GetAll()?.AsQueryable()
+                            ?? Enumerable.Empty<VwEInvoiceMaster>().AsQueryable();
 
-        public void SaveInvoice(string strinvoice,string filename)
+                query = query.Where(x => x.IsUploaded == true);
+
+                if (billType.HasValue)
+                    query = query.Where(x => x.TypeGuid == billType.Value);
+
+                if (dateFrom.HasValue && dateTo.HasValue)
+                    query = query.Where(x => x.Date.HasValue
+                        && x.Date.Value >= dateFrom.Value
+                        && x.Date.Value <= dateTo.Value);
+
+                return Ok(query.ToList());
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Failed to get uploaded invoices");
+                return BadRequest(new { Message = "حدث خطأ", Error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// يحفظ محتوى الفاتورة JSON في المسار المحدد.
+        /// subFolder: "" = root folder | "Sent" = فواتير اترسلت | "Failed" = فواتير فاشلة
+        /// </summary>
+        public void SaveInvoice(string strinvoice, string filename, string subFolder = "")
         {
             Appsettings settings = Configuration.GetRequiredSection("Settings").Get<Appsettings>();
-            string path = @"C:\Invoices";
+            string basePath = @"C:\Invoices";
+
             if (settings.InvoiceFolderPath != null && !string.IsNullOrEmpty(settings.InvoiceFolderPath))
-                path = settings.InvoiceFolderPath;
+                basePath = settings.InvoiceFolderPath;
+
+            string path = string.IsNullOrEmpty(subFolder)
+                ? basePath
+                : Path.Combine(basePath, subFolder);
+
             if (!Directory.Exists(path))
-            {
                 Directory.CreateDirectory(path);
 
-               
-            }
-            //string Invoice = strinvoice.Replace("\"signatures\":null,", "")
-            //.Replace(":null", ":\"\"")
-            //.Replace("null", "\"\"");
-            string filepath = path + "\\" + filename + ".json";
-
+            string filepath = Path.Combine(path, filename + ".json");
             System.IO.File.WriteAllBytes(filepath, System.Text.Encoding.UTF8.GetBytes(strinvoice));
-            logger.LogInformation("Invoice payload saved. FilePath: {InvoicePayloadPath}", filepath);
 
-            //if (!System.IO.File.Exists(filepath))
-            //{
-            //    // Create a file to write to.   
-            //    using (StreamWriter sw = System.IO.File.CreateText(filepath))
-            //    {
-            //        sw.WriteLine(Invoice);
-            //    }
-            //}
-            //else
-            //{
-            //    using (StreamWriter sw = System.IO.File.AppendText(filepath))
-            //    {
-            //        sw.WriteLine(Invoice);
-            //    }
-            //}
+            logger.LogInformation("Invoice payload saved. FilePath: {InvoicePayloadPath}", filepath);
         }
 
         private static JObject ParseDocumentJsonPreservingPrimitiveValues(string json)
@@ -866,35 +876,24 @@ namespace Egypt_EInvoice_Api.Controllers
         [HttpPost]
         [Route("UploadInvoices")]
         public List<BillResponse> UploadInvoices(List<VwEInvoiceMasterdto> itemList)
-
         {
-           
             List<BillResponse> uploadeditems = new List<BillResponse>();
-            VwEInvoiceMasterdto obj = new VwEInvoiceMasterdto();
-            obj.ErrorMessage = "";
+
             foreach (var item in itemList)
             {
                 uploadeditems.Add(UploadInvoice(item));
-
             }
 
             return uploadeditems;
-
-
         }
-    
 
-         
-            [HttpGet("GetRecentDocuments")]
-            public async Task<IActionResult> GetRecentDocuments(
-                int pageNo = 1,
-                int pageSize = 20)
-            {
-                var result = await _eta.GetRecentDocumentsAsync(pageNo, pageSize);
-                return Ok(result);
-            }
-        
-
-
+        [HttpGet("GetRecentDocuments")]
+        public async Task<IActionResult> GetRecentDocuments(
+            int pageNo = 1,
+            int pageSize = 20)
+        {
+            var result = await _eta.GetRecentDocumentsAsync(pageNo, pageSize);
+            return Ok(result);
+        }
     }
 }
