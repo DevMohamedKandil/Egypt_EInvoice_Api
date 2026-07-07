@@ -20,11 +20,7 @@ namespace Egypt_EInvoice_Api.Controllers
 
         public GovController(EInvoiceDBContext context)
         {
-            this.context = context;
-            string apiUrl = "";
-            string userName = "";
-            string password = "";
-            
+            this.context = context; 
 
            // eInvoiceGovManager = new EInvoiceGovManager(apiUrl, userName, password, "");
         }

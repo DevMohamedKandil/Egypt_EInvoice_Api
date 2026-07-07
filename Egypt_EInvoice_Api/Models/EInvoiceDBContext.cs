@@ -49,7 +49,10 @@ namespace Egypt_EInvoice_Api.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasAnnotation("Relational:Collation", "Arabic_CI_AI");
-
+            modelBuilder.Entity<Bill>(entity =>
+            {
+                entity.ToTable(tb => tb.UseSqlOutputClause(false));
+            });
             // =========================================================
             // VWEInvoice — SQL columns are float → C# double
             // =========================================================
