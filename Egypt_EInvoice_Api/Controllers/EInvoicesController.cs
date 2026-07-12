@@ -841,7 +841,7 @@ namespace Egypt_EInvoice_Api.Controllers
         /// يحفظ محتوى الفاتورة JSON في المسار المحدد.
         /// subFolder: "" = root folder | "Sent" = فواتير اترسلت | "Failed" = فواتير فاشلة
         /// </summary>
-        public void SaveInvoice(string strinvoice, string filename, string subFolder = "")
+        private void SaveInvoice(string strinvoice, string filename, string subFolder = "")
         {
             Appsettings settings = Configuration.GetRequiredSection("Settings").Get<Appsettings>();
             string basePath = @"C:\Invoices";
